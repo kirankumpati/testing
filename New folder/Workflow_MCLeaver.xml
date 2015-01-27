@@ -1,0 +1,199 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE Workflow PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<Workflow  explicitTransitions="true"   name="MC Leaver - Business Process" type="IdentityLifecycle">
+  <Variable input="true" name="event"/>
+  <Variable input="true" name="trigger"/>
+  <Variable initializer="true" input="true" name="trace"/>
+  <Variable initializer="0" name="timeToWait"/>
+  <Variable initializer="do-not-reply-AIMS@millercoors.com" name="from"/>
+  <Variable initializer="kiran.kumpati@striketru.com" name="to"/>
+  <Variable initializer="script:return new HashMap()" input="true" name="approvalMap"/>
+  <Variable initializer="script:event.getIdentityFullName();" input="true" name="identityDisplayName"/>
+  <Step icon="Start" name="Start" posX="23" posY="28" resultVariable="timeToWait">
+    <Script>
+      <Source>
+	  
+		import sailpoint.api.SailPointContext;
+		import sailpoint.api.SailPointFactory;
+		import sailpoint.object.*;
+
+		String managerEmail = "";
+		String initialPassword = "";
+		String firstName = "";
+		String lastName = "";
+		String userID = "";
+		String userMail = "";
+		String managerEmpId = "";
+		String location = "";
+		String identityCreated = "";
+		String startDate = ""; 
+		
+		SailPointContext myContext = SailPointFactory.getCurrentContext();
+		Identity identity = myContext.getObjectByName(Identity.class,identityDisplayName);
+		
+		managerEmail = identity.getAttribute("managerEmail");	
+		initialPassword = identity.getAttribute("initialPassword");
+		firstName = identity.getAttribute("firstname");
+		lastName = identity.getAttribute("lastname");
+		userID = identity.getAttribute("userid");
+		userMail = identity.getAttribute("mail");
+		managerEmpId = identity.getAttribute("managerEmpId");
+		location = identity.getAttribute("location");
+		identityCreated = identity.getCreated().toString();
+		startDate = identity.getAttribute("startDate");
+		
+		System.out.println(" The display name is : " + identityDisplayName);
+		System.out.println(" The manager email is :" + managerEmail);
+		System.out.println(" The initial password is :" + initialPassword);
+		System.out.println(" The first name is :" + firstName);
+		System.out.println(" The last name is :" + lastName);
+		System.out.println(" The user id is :" + userID);
+		System.out.println(" The user mail is :" + userMail);
+		System.out.println(" The manager emp id is :" + managerEmpId);
+		System.out.println(" The location is :" + location);
+		System.out.println(" The identity created time is :" + identityCreated);
+		System.out.println(" The start date is :" + startDate);
+		
+				
+		approvalMap.put("managerEmail",managerEmail);
+		approvalMap.put("initialPassword",initialPassword);
+		approvalMap.put("firstName",firstName);
+		approvalMap.put("lastName",lastName);
+		approvalMap.put("userID",userID);
+		approvalMap.put("userMail",userMail);
+		approvalMap.put("managerEmpId",managerEmpId);
+		approvalMap.put("location",location);
+		approvalMap.put("identityCreated",identityCreated);
+		approvalMap.put("startDate",startDate);
+		return approvalMap;
+		
+		
+	  </Source>
+    </Script>
+    <Transition to="Wait to Terminate"/>
+  </Step>
+  <Step icon="Stop" name="Stop" posX="787" posY="119"/>
+  <Step icon="Default" name="Wait to Terminate" posX="145" posY="30" resultVariable="timeToWait">
+   <Script>
+      <Source>
+			
+				import java.util.Calendar;
+				import java.util.TimeZone;
+				import java.util.Arrays;
+				import java.text.DateFormat;
+				import java.text.SimpleDateFormat;
+				import sailpoint.object.Identity;
+				
+				long timeDifMinutes = 0;
+				
+				Calendar targetTime = Calendar.getInstance();
+				targetTime.set(Calendar.HOUR_OF_DAY, 19);
+				targetTime.set(Calendar.MINUTE, 0);
+				targetTime.set(Calendar.SECOND, 0);
+				System.out.println("The target time is :" + targetTime.getTime());
+				
+				Calendar currentTime = Calendar.getInstance();
+				System.out.println("The current time is :" + currentTime.getTime() );
+								
+				long timeDifInMilliSec = targetTime.getTimeInMillis() - currentTime.getTimeInMillis();
+				long timeDifMinutes = timeDifInMilliSec / (60 * 1000);
+			      
+				System.out.println("Minutes to wait: " + timeDifMinutes);
+				if(timeDifMinutes >= 0)
+				{				
+					//return timeDifMinutes.toString();
+					return "1";
+				}
+				else
+				{
+					return "0";
+				}
+				
+			
+		</Source>
+    </Script>
+    <Transition to="Create Termination Provisioning Plan"/>
+  </Step>
+  <Step icon="Default" name="Create Termination Provisioning Plan" posX="248" posY="40" ><!--wait="ref:timeToWait"-->
+    <Transition to="Execute Provisioning Plan"/>
+  </Step>
+  <Step icon="Default" name="Execute Provisioning Plan" posX="350" posY="51">
+	<Arg name="identityName" value="ref:identityDisplayName"/>
+		<!--<WorkflowRef>
+			<Reference class="sailpoint.object.Workflow" name="LCM Provisioning" />
+		</WorkflowRef>-->
+    <Transition to="Send Disablement Notifications"/>
+  </Step>
+  <Step action="sendEmail" icon="Default" name="Send Disablement Notifications" posX="459" posY="65">
+    <Arg name="template" value="AD Accounts Disablement Notification"/>
+    <Arg name="from" value="ref:from"/>
+    <Arg name="to" value="ref:to"/>
+	<Arg name="lastName" value="script:approvalMap.get(&quot;lastName&quot;);"/>
+	
+    <Transition to="Wait to Delete"/>
+  </Step>
+  <Step icon="Default" name="Wait to Delete" posX="558" posY="79" resultVariable="timeToWait">
+  <Arg name="startDate" value="script:approvalMap.get(&quot;startDate&quot;);"/>
+  <Script>
+      <Source>
+			
+				import java.util.Calendar;
+				java.util.GregorianCalendar;
+				import java.util.TimeZone;
+				import java.util.Arrays;
+				import java.text.DateFormat;
+				import java.text.SimpleDateFormat;
+				import sailpoint.object.Identity;
+				import java.util.Date;
+				
+				//String startDate = startDate.toString();
+				Date date = null;
+				try{
+				SimpleDateFormat formatter = new SimpleDateFormat("MM/dd/yyyy");
+				date = formatter.parse(startDate);
+				}
+				catch(Exception e)
+				{
+					System.out.println("The exception is : " +e.getMessage());
+				}
+				System.out.println("Start Date in flat file is : " + date);
+				Calendar calendar = Calendar.getInstance();
+				calendar.setTime(date);
+				calendar.add(Calendar.DATE, 60);
+				System.out.println("Account deletion date is :" + calendar.getTime());
+				
+				Calendar currentTime = Calendar.getInstance();
+				
+				long diffInMill = calendar.getTimeInMillis() - currentTime.getTimeInMillis() ;
+				long timeDifMinutes = diffInMill / (60 * 1000) ;
+				
+				System.out.println("Difference of time in minutes is :" + timeDifMinutes);
+				if(timeDifMinutes >= 0)
+				{				
+					//return timeDifMinutes.toString();
+					return "1";
+				}
+				else
+				{
+					return "0";
+				}
+			
+		</Source>
+    </Script>
+    <Transition to="Stop"/>
+    <Transition to="Create Deletion Provisioning Plan"/>
+  </Step>
+  <Step icon="Default" name="Create Deletion Provisioning Plan" posX="540" posY="192">
+    <Transition to="Execute Deletion Provisioning Plan"/>
+  </Step>
+  <Step icon="Default" name="Execute Deletion Provisioning Plan" posX="638" posY="210">
+    <Transition to="Send Deletion Email"/>
+  </Step>
+  <Step action="sendEmail" icon="Default" name="Send Deletion Email" posX="729" posY="225">
+    <Arg name="from" value="ref:from"/>
+    <Arg name="to" value="ref:to"/>
+    <Arg name="template" value="AD Accounts Deletion Notification"/>
+	<Arg name="lastName" value="script:approvalMap.get(&quot;lastName&quot;);"/>
+    <Transition to="Stop"/>
+  </Step>
+</Workflow>
